@@ -1,2 +1,2 @@
-sdist
-bdist_wheel
+setuptools
+wheel
