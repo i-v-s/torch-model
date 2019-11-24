@@ -62,6 +62,14 @@ def get_device():
     return torch.device('cuda' if use_cuda else 'cpu')
 
 
+def print_hash(name, x):
+    import xxhash
+    xh = xxhash.xxh64()
+    xh.reset()
+    xh.update(x.detach().cpu().numpy().tostring())
+    print(name, xh.hexdigest())
+
+
 def create_optimizer(config, model):
     return optimizers[config['type']](model.parameters(), **{k: v for k, v in config.items() if k != 'type'})
 
