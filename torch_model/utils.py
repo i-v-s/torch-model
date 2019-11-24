@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.nn import Module
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta
+from .io import batch_to_masks, images_to_batch
 
 models = {'unet': UNet}
 optimizers = {
@@ -63,6 +64,18 @@ def get_device():
 
 def create_optimizer(config, model):
     return optimizers[config['type']](model.parameters(), **{k: v for k, v in config.items() if k != 'type'})
+
+
+def process_image(frame, model, threshold=0.5):
+    batch = images_to_batch([frame], model=model)
+    mask = model(batch)
+    return np.squeeze(batch_to_masks(mask, threshold), 0)
+
+
+def get_process(model, threshold=0.5):
+    def process(frame):
+        return process_image(frame, model, threshold)
+    return process
 
 
 def scale_with_padding(target_shape: Tuple[int, int, int], source: np.ndarray,

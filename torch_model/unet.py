@@ -16,11 +16,7 @@ class Conv(nn.Module):
         )
 
     def forward(self, x):
-        try:
-            x = self.conv(x)
-        except RuntimeError as e:
-            raise e
-        return x
+        return self.conv(x)
 
 
 class Down(nn.Module):
