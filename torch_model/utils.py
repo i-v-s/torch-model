@@ -1,6 +1,6 @@
 import cv2
 import json
-from os.path import join, isfile, isdir
+from os.path import join, isfile, isdir, abspath
 from os import mkdir
 from typing import Tuple
 from . import UNet
@@ -20,7 +20,7 @@ optimizers = {
 }
 
 
-def load_model(name, train=False, directory='models', device=None, best=False, n_classes=None):
+def load_model(name, train=False, directory='models', device=None, best=False, n_classes=None, verbose=False):
     model_dir = join(directory, name)
     if not isdir(model_dir):
         mkdir(model_dir)
@@ -34,6 +34,8 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)
     if isfile(weights_fn):
         model.load_state_dict(torch.load(weights_fn))
+        if verbose:
+            print(f'Loaded model weights from {abspath(weights_fn)}')
     if n_classes is not None and n_classes > params['n_classes']:
         model.expand_out(n_classes)
     model = model.to(device)
@@ -74,15 +76,33 @@ def create_optimizer(config, model):
     return optimizers[config['type']](model.parameters(), **{k: v for k, v in config.items() if k != 'type'})
 
 
-def process_image(frame, model, threshold=0.5):
-    batch = images_to_batch([frame], model=model)
-    mask = model(batch)
-    return np.squeeze(batch_to_masks(mask, threshold), 0)
+def process_image(frame, model, threshold=0.5, size=None):
+    if size is not None:
+        h, w, _ = frame.shape
+        batch_size, ws, hs = size
+        w_step = frame.shape[1] // (frame.shape[1] // ws + 1)
+        h_step = frame.shape[0] // (frame.shape[0] // hs + 1)
+        offsets = [(min(x, w - ws), min(y, h - hs)) for x in range(0, w, w_step) for y in range(0, h, h_step)]
+        frames = [frame[y:y + hs, x:x + ws] for x, y in offsets]
+        result = np.empty((h, w, model.n_classes), dtype=np.uint8)
+        for bo in range(0, len(frames), batch_size):
+            batch = images_to_batch(frames[bo:bo + batch_size], model=model)
+            masks = model(batch)
+            masks = batch_to_masks(masks, threshold=threshold)
+            for o in range(bo, min(len(frames), bo + batch_size)):
+                x, y = offsets[o]
+                result[y:y + hs, x:x + ws] = masks[o - bo]
+        return result
+    else:
+        frames = [frame]
+        batch = images_to_batch(frames, model=model)
+        mask = model(batch)
+        return np.squeeze(batch_to_masks(mask, threshold), 0)
 
 
-def get_process(model, threshold=0.5):
+def get_process(model, threshold=0.5, size=None):
     def process(frame):
-        return process_image(frame, model, threshold)
+        return process_image(frame, model, threshold, size=size)
     return process
 
 
