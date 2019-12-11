@@ -76,7 +76,7 @@ def create_optimizer(config, model):
     return optimizers[config['type']](model.parameters(), **{k: v for k, v in config.items() if k != 'type'})
 
 
-def process_image(frame, model, threshold=0.5, size=None):
+def process_image(frame, model, threshold=0.5, size=None, is_bad=None):
     if size is not None:
         h, w, _ = frame.shape
         batch_size, ws, hs = size
@@ -97,12 +97,16 @@ def process_image(frame, model, threshold=0.5, size=None):
         frames = [frame]
         batch = images_to_batch(frames, model=model)
         mask = model(batch)
-        return np.squeeze(batch_to_masks(mask, threshold), 0)
+        np_result = np.squeeze(batch_to_masks(mask, threshold, with_alpha=model.with_alpha), 0)
+        if is_bad:
+            return np_result, is_bad(mask)
+        else:
+            return np_result
 
 
-def get_process(model, threshold=0.5, size=None):
+def get_process(model, threshold=0.5, size=None, is_bad=None):
     def process(frame):
-        return process_image(frame, model, threshold, size=size)
+        return process_image(frame, model, threshold, size=size, is_bad=is_bad)
     return process
 
 
