@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.nn import Module
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta
+from .loader import load_yaml
 from .io import batch_to_masks, images_to_batch
 
 models = {'unet': UNet}
@@ -24,11 +25,14 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     model_dir = join(directory, name)
     if not isdir(model_dir):
         mkdir(model_dir)
-    with open(join('models', '%s.json' % name)) as f:
-        params = json.load(f)
-    model_type = params['type']
-    del params['type']
-    model = models[model_type](**params)
+    if isfile(join('models', '%s.yaml' % name)):
+        model = load_yaml(join('models', '%s.yaml' % name))
+    else:
+        with open(join('models', '%s.json' % name)) as f:
+            params = json.load(f)
+        model_type = params['type']
+        del params['type']
+        model = models[model_type](**params)
     weights_fn = join(model_dir, ('%s_best.pt' if best else '%s.pt') % name)
     if not isfile(weights_fn):
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)

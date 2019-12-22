@@ -13,7 +13,7 @@ class LoaderInfo(NamedTuple):
 class Reshape(nn.Module):
     def __init__(self, shape):
         super().__init__()
-        self.shape = shape
+        self.shape = tuple(-1 if type(d) is str else d for d in shape)
 
     def forward(self, x):
         return x.reshape(self.shape)
@@ -80,7 +80,7 @@ modules = {
 }
 
 
-def load(fn):
+def load_yaml(fn):
     with open(fn, 'r') as file:
         conf = yaml.load(file)
     model_conf = conf['model']
@@ -89,5 +89,5 @@ def load(fn):
         input_shape, model_conf['seq'],
         LoaderInfo(modules, {'classes': len(model_conf['classes'])})
     )
-
-    print(conf)
+    setattr(model, 'classes', model_conf['classes'])
+    return model
