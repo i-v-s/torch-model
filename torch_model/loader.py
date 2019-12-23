@@ -76,7 +76,7 @@ def sequential(shape, items, li: LoaderInfo):
 
 modules = {
     'conv2d': conv2d, 'conv': Conv, 'seq': sequential, 'flatten': flatten, 'linear': linear,
-    'relu': simple(nn.ReLU), 'sigmoid': simple(nn.Sigmoid)
+    'relu': simple(nn.ReLU), 'sigmoid': simple(nn.Sigmoid), 'dropout': simple(nn.Dropout)
 }
 
 
