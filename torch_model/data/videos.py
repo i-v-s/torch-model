@@ -36,13 +36,14 @@ class VideoIterator:
 
 
 class VideosDataset(IterableDataset):
-    def __init__(self, directory, class_list, aug=None):
+    def __init__(self, directory, class_list, aug=None, max_epochs=None):
         super().__init__()
         self.directory = directory
         self.class_list = class_list #  or [name for name in listdir(directory) if isdir(join(directory, name))]
         self.class_map = {c: i for i, c in enumerate(self.class_list)}
         self.items = None
         self.aug = aug
+        self.max_epochs = max_epochs
         self.update()
 
     def classes_to_tensor(self, classes):
@@ -59,7 +60,11 @@ class VideosDataset(IterableDataset):
         ]
 
     def __iter__(self):
+        items = copy(self.items)
+        if self.max_epochs:
+            shuffle(items)
+            items = items[:self.max_epochs]
         info = get_worker_info()
-        items = copy(self.items if info is None else self.items[info.id::info.num_workers])
+        items = copy(items if info is None else items[info.id::info.num_workers])
         shuffle(items)
         return VideoIterator(items, self.directory, self.aug)
