@@ -1,3 +1,4 @@
+from copy import copy
 from typing import NamedTuple
 
 import numpy as np
@@ -10,6 +11,9 @@ import yaml
 class LoaderInfo(NamedTuple):
     modules: dict
     values: dict
+    verbose: bool
+    indent: str = ''
+
 
 class Reshape(nn.Module):
     def __init__(self, shape):
@@ -29,14 +33,14 @@ class Permute(nn.Module):
         return x.permute(self.dims)
 
 
-def permute(shape, *dims, batch_dims=1):
+def permute(shape, *dims, batch_dims=1, loader_info=None):
     assert len(shape) == len(dims) + batch_dims
     dims = tuple(range(batch_dims)) + tuple(d + batch_dims for d in dims)
     shape = tuple(shape[d] for d in dims)
     return shape, Permute(dims)
 
 
-def conv2d(shape, out_channels, *args, **kwargs):
+def conv2d(shape, out_channels, *args, loader_info=None, **kwargs):
     n, c, h, w = shape
     conv = nn.Conv2d(c, out_channels, *args, **kwargs)
     h, w = (
@@ -46,7 +50,7 @@ def conv2d(shape, out_channels, *args, **kwargs):
     return (n, out_channels, h, w), conv
 
 
-def convT2d(shape, out_channels, *args, **kwargs):
+def convT2d(shape, out_channels, *args, loader_info=None, **kwargs):
     n, c, h, w = shape
     convT = nn.ConvTranspose2d(c, out_channels, *args, **kwargs)
     h, w = (
@@ -57,28 +61,28 @@ def convT2d(shape, out_channels, *args, **kwargs):
     return (n, out_channels, h, w), convT
 
 
-def flatten(shape, batch_dims=1):
+def flatten(shape, batch_dims=1, loader_info=None):
     shape = shape[:batch_dims] + (np.product(shape[batch_dims:]),)
     return shape, Reshape(shape)
 
 
-def reshape(shape, *result_shape, batch_dims=1):
+def reshape(shape, *result_shape, batch_dims=1, loader_info=None):
     assert np.product(shape[batch_dims:]) == np.product(result_shape)
     shape = shape[:batch_dims] + result_shape
     return shape, Reshape(shape)
 
 
-def linear(shape, out_features, *args, **kwargs):
+def linear(shape, out_features, *args, loader_info=None, **kwargs):
     return shape[:-1] + (out_features,), nn.Linear(shape[-1], out_features, *args, **kwargs)
 
 
 def simple(module):
-    def func(shape, *args, **kwargs):
+    def func(shape, *args, loader_info=None, **kwargs):
         return shape, module(*args, **kwargs)
     return func
 
 
-def bn2d(shape, *args, **kwargs):
+def bn2d(shape, *args, loader_info=None, **kwargs):
     assert len(shape) == 4
     return shape, nn.BatchNorm2d(shape[1], *args, **kwargs)
 
@@ -102,27 +106,40 @@ def parse_params(params, values):
     return args, kwargs
 
 
-def sequential(shape, items, li: LoaderInfo, verbose=True):
+def print_item(indent, name, shape, args=None):
+    title = f'{indent}{name}'
+    if args:
+        title += f"({', '.join(map(str, args))})"
+    print(f'{title:50} {shape}')
+
+
+def sequential(shape, items, loader_info: LoaderInfo, seq_name=''):
+    modules, values, verbose, indent = loader_info
     if verbose:
-        print('Sequence initial shape:', shape)
+        print_item(indent, 'sequence ' + seq_name, shape)
+    indent += '  '
+    loader_info = LoaderInfo(modules, values, verbose, indent)
     result = []
     for item in items:
         if type(item) is str:
-            shape, model = li.modules[item](shape)
+            old_shape = shape
+            shape, model = loader_info.modules[item](shape)
+            if verbose:
+                print_item(indent, item, shape if old_shape != shape else '')
             result.append(model)
         else:
             for name, params in item.items():
-                args, kwargs = parse_params(params, li.values)
-                shape, model = li.modules[name](shape, *args, **kwargs)
+                args, kwargs = parse_params(params, values)
+                shape, model = modules[name](shape, *args, **kwargs, loader_info=loader_info)
                 if verbose:
-                    title = f"After {name}({', '.join(map(str, args))}):"
-                    title += ' ' * (32 - len(title))
-                    print(f"{title} {shape}")
+                    print_item(indent, name, shape, args)
+                    # title = f"{indent}{name}({', '.join(map(str, args))}):"
+                    # print(f"{title:50} {shape}")
                 result.append(model)
     return shape, nn.Sequential(*result)
 
 
-modules = {
+global_modules = {
     'conv2d': conv2d, 'convt2d': convT2d, 'conv': Conv, 'seq': sequential,
     'flatten': flatten, 'reshape': reshape, 'permute': permute,
     'linear': linear,
@@ -131,15 +148,38 @@ modules = {
 }
 
 
-def load_yaml(fn):
+def module_dec(name, module):
+    params = module['params']
+    def wrapper(shape, *args, loader_info: LoaderInfo = None):
+        modules, values, verbose, indent = loader_info
+        values = copy(values)
+        values.update({k: v for k, v in zip(params, args)})
+        return modules['seq'](
+            shape, module['seq'],
+            LoaderInfo(modules, values, verbose, indent),
+            seq_name=name
+        )
+    return wrapper
+
+
+def update_modules(modules, new_modules):
+    for name, item in new_modules.items():
+        modules[name] = module_dec(name, item)
+
+
+def load_yaml(fn, verbose=True):
     with open(fn, 'r') as file:
-        conf = yaml.load(file)
+        conf = yaml.safe_load(file)
+    modules = copy(global_modules)
+    if 'modules' in conf:
+        update_modules(modules, conf['modules'])
     model_conf = conf['model']
     input_shape = tuple(model_conf['input'])
     classes = model_conf['classes']
     output_shape, model = modules['seq'](
         input_shape, model_conf['seq'],
-        LoaderInfo(modules, {'classes': classes if type(classes) is int else len(classes)})
+        LoaderInfo(modules, {'classes': classes if type(classes) is int else len(classes)}, verbose),
+        seq_name=''
     )
     setattr(model, 'classes', model_conf['classes'])
     return model
