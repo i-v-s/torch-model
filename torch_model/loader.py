@@ -6,6 +6,7 @@ import numpy as np
 from torch import nn
 import torch
 from .blocks import Conv
+from .wavenet import WaveStart, WaveCell, WaveReset, WaveEnd
 import yaml
 
 class LoaderInfo(NamedTuple):
@@ -52,6 +53,19 @@ def add_shape_calc(shapes):
     return result
 
 
+class TupleProc(nn.Module):
+    def __init__(self, *modules):
+        super().__init__()
+        self.items = nn.ModuleList(modules)
+
+    def forward(self, *input, **kwargs):
+        print()
+
+
+def tuple_shape_calc(shapes):
+    print()
+
+
 def permute(shape, *dims, batch_dims=1, loader_info=None):
     assert len(shape) == len(dims) + batch_dims
     dims = tuple(range(batch_dims)) + tuple(d + batch_dims for d in dims)
@@ -92,6 +106,16 @@ def convT2d(shape, out_channels, *args, loader_info=None, **kwargs):
         for i, v in enumerate((h, w))
     )
     return (n, out_channels, h, w), convT
+
+
+def convT1d(shape, out_channels, *args, loader_info=None, **kwargs):
+    N, C, L = shape
+    convT = nn.ConvTranspose1d(C, out_channels, *args, **kwargs)
+    L = (
+        (L - 1) * convT.stride[0] - 2 * convT.padding[0] +
+        convT.dilation[0] * (convT.kernel_size[0] - 1) + convT.output_padding[0] + 1
+    )
+    return (N, out_channels, L), convT
 
 
 def flatten(shape, batch_dims=1, loader_info=None):
@@ -196,12 +220,14 @@ def container(module, module_name, shape_calc=None):
 
 
 global_modules = {
-    'conv2d': conv2d, 'convt2d': convT2d, 'conv': Conv, 'maxpool2d': maxpool2d,
+    'conv2d': conv2d, 'convt1d': convT1d, 'convt2d': convT2d, 'conv': Conv, 'maxpool2d': maxpool2d,
     'flatten': flatten, 'reshape': reshape, 'permute': permute,
     'linear': linear,
     'relu': simple(nn.ReLU), 'prelu': simple(nn.PReLU), 'lrelu': simple(nn.LeakyReLU), 'sigmoid': simple(nn.Sigmoid),
     'dropout': simple(nn.Dropout), 'bn2d': bn2d,
     'nop': nop, 'add': container(Add, 'add', add_shape_calc), 'seq': container(nn.Sequential, 'seq'),
+    'tuple': container(TupleProc, 'tuple', tuple_shape_calc),
+    'wn_start': WaveStart.create, 'wn_cell': WaveCell.create, 'wn_reset': WaveReset.create, 'wn_end': WaveEnd.create
 }
 
 
