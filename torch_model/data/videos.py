@@ -55,7 +55,9 @@ class VideosDataset(IterableDataset):
     def update(self):
         self.items = [
             (join(cn, fn), self.classes_to_tensor(cn.split('-')))
-            for cn in listdir(self.directory) for fn in listdir(join(self.directory, cn))
+            for cn in listdir(self.directory)
+            if isdir(join(self.directory, cn))
+            for fn in listdir(join(self.directory, cn))
             if cn in self.class_list and isfile(join(self.directory, cn, fn)) and (fn.endswith('.mp4') or fn.endswith('.avi'))
         ]
 
