@@ -10,6 +10,7 @@ from torch.nn import Module
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta
 from .loader import load_yaml
 from .io import batch_to_masks, images_to_batch
+from .trainer import Trainer
 
 models = {'unet': UNet}
 optimizers = {
@@ -45,14 +46,15 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     model = model.to(device)
     if train:
         model.train()
+        if isfile(join(model_dir, 'state.json')):
+            with open(join(model_dir, 'state.json'), 'r') as f:
+                state = json.load(f)
+        else:
+            state = None
+        return model, Trainer(model, name, state)
     else:
         model.eval()
-    if isfile(join(model_dir, 'state.json')):
-        with open(join(model_dir, 'state.json'), 'r') as f:
-            state = json.load(f)
-        return model, state.get('best_loss', None), state.get('epoch', 1)
-    else:
-        return model, None, 1
+        return model
 
 
 def save_model(name, model: Module, best_loss, epoch, directory='models'):
