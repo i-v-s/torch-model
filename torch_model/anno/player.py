@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 import xxhash
 
-from torch_model import scale_with_padding
+from torch_model import scale_with_padding, load_model
 
 
 class OCVSource:
@@ -31,8 +31,17 @@ class OCVSource:
 
 class Annotation:
     """Object of this class consists of annotation data and interface methods."""
-    def __init__(self):
-        return
+    def __init__(self, model_name=None, device=None):
+        self.model_name = model_name
+        self.device = device
+        self.model = None
+        self.update_model()
+
+    def update_model(self):
+        self.model = load_model(self.model_name, device=self.device)
+
+    def process(self, frame:np.ndarray):
+        raise NotImplementedError
 
     def clear(self):
         return
@@ -236,7 +245,7 @@ class AnnoPlayer:
             cv2.rectangle(image, p1, p2, (0, 255, 128))
         cv2.imshow(self.name, image)
 
-    def play(self, source, process, prepare=None, use_model=False, update=None, writer=None, delay=1):
+    def play(self, source, prepare=None, use_model=False, update=None, writer=None, delay=1):
         pause, read_one = True, True
         frame = None
 
@@ -252,7 +261,9 @@ class AnnoPlayer:
                 except StopIteration:
                     break
                 self.frame = frame
-                result = process(frame) if use_model else self.zero_mask(frame)
+                if use_model:
+                    self.anno.process(frame)
+                result = self.zero_mask(frame) # self.anno.process(frame) if use_model else
                 if type(result) is tuple:
                     self.mask, is_bad = result
                     if is_bad and self.frame_name is None:
@@ -287,7 +298,8 @@ class AnnoPlayer:
                 read_one = True
             elif k == ord('m'):
                 use_model = not use_model
-                self.mask = process(frame) if use_model else self.zero_mask(frame)
+                # self.mask = \
+                self.anno.process(frame) if use_model else self.zero_mask(frame)
                 if type(self.mask) is tuple:
                     self.mask, is_bad = self.mask
                 if self.mask.shape[-1] < 3:
