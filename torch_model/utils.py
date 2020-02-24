@@ -63,11 +63,13 @@ def save_model(name, model: Module, best_loss, epoch, directory='models'):
         json.dump({'best_loss': best_loss, 'epoch': epoch}, f, indent='  ')
 
 
-def get_device():
+def get_device(device=0):
     print('PyTorch version:', torch.__version__)
     use_cuda = torch.cuda.is_available()
     print('Use CUDA:', torch.version.cuda if use_cuda else False)
-    return torch.device('cuda' if use_cuda else 'cpu')
+    device = torch.device(device if use_cuda else 'cpu')
+    print('Use device', torch.cuda.get_device_name(device))
+    return device
 
 
 def print_hash(name, x):
