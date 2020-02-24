@@ -87,6 +87,13 @@ def maxpool2d(shape, *args, loader_info=None, **kwargs):
     return (n, c, h, w), pool
 
 
+def conv1d(shape, out_channels, *args, loader_info=None, **kwargs):
+    n, c, l = shape
+    conv = nn.Conv1d(c, out_channels, *args, **kwargs)
+    l = (l + 2 * conv.padding[0] - conv.dilation[0] * (conv.kernel_size[0] - 1) - 1) // conv.stride[0] + 1
+    return (n, out_channels, l), conv
+
+
 def conv2d(shape, out_channels, *args, loader_info=None, **kwargs):
     n, c, h, w = shape
     conv = nn.Conv2d(c, out_channels, *args, **kwargs)
@@ -131,6 +138,28 @@ def reshape(shape, *result_shape, batch_dims=1, loader_info=None):
 
 def linear(shape, out_features, *args, loader_info=None, **kwargs):
     return shape[:-1] + (out_features,), nn.Linear(shape[-1], out_features, *args, **kwargs)
+
+
+class Aggregate(nn.Module):
+    def __init__(self, func, dim):
+        super().__init__()
+        self.dim = dim
+        self.func = func
+
+    def forward(self, x):
+        result = self.func(x, dim=self.dim)
+        if self.func is torch.max:
+            return result[0]
+        return result
+
+    @classmethod
+    def create(cls, func):
+        def wrapper(shape, dim, loader_info=None):
+            shape = list(shape)
+            for d in [dim] if type(dim) is int else dim:
+                shape[d] = None
+            return tuple(filter(lambda d: d is not None, shape)), cls(func, dim)
+        return wrapper
 
 
 def simple(module):
@@ -220,9 +249,9 @@ def container(module, module_name, shape_calc=None):
 
 
 global_modules = {
-    'conv2d': conv2d, 'convt1d': convT1d, 'convt2d': convT2d, 'conv': Conv, 'maxpool2d': maxpool2d,
+    'conv1d': conv1d, 'conv2d': conv2d, 'convt1d': convT1d, 'convt2d': convT2d, 'conv': Conv, 'maxpool2d': maxpool2d,
     'flatten': flatten, 'reshape': reshape, 'permute': permute,
-    'linear': linear,
+    'linear': linear, 'max': Aggregate.create(torch.max),
     'relu': simple(nn.ReLU), 'prelu': simple(nn.PReLU), 'lrelu': simple(nn.LeakyReLU), 'sigmoid': simple(nn.Sigmoid),
     'dropout': simple(nn.Dropout), 'bn2d': bn2d,
     'nop': nop, 'add': container(Add, 'add', add_shape_calc), 'seq': container(nn.Sequential, 'seq'),
