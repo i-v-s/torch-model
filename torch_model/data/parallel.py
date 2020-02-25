@@ -63,7 +63,7 @@ class ParallelDataset(Dataset):
             if mask_idx is not None:
                 items[mask_idx] = augmented['mask']
         if self.post_proc is not None:
-            if type(self.post_proc) is list:
+            if type(self.post_proc) is dict:
                 for name, proc in self.post_proc.items():
                     idx = self.classes.index(name)
                     items[idx] = proc(items[idx])

@@ -68,7 +68,7 @@ def get_device(device=0):
     use_cuda = torch.cuda.is_available()
     print('Use CUDA:', torch.version.cuda if use_cuda else False)
     device = torch.device(device if use_cuda else 'cpu')
-    print('Use device', torch.cuda.get_device_name(device))
+    print('Use device:', torch.cuda.get_device_name(device))
     return device
 
 

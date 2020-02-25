@@ -1,1 +1,1 @@
-from .player import AnnoPlayer, Annotation, OCVSource
+from .player import AnnoPlayer, Annotation, SegAnnotation, OCVSource, PNGSource

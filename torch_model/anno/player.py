@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 from os import mkdir, listdir
 from os.path import isdir, isfile, join
@@ -8,6 +8,30 @@ import cv2
 import xxhash
 
 from torch_model import scale_with_padding, load_model
+
+class PNGSource:
+    """Simple OpenCV source"""
+    def __init__(self, directory, num_sort=True):
+        self.directory = directory
+        files = [fn for fn in listdir(directory) if fn.endswith('.png') and isfile(join(directory, fn))]
+        if num_sort:
+            self.files = sorted(files, key=lambda fn: int(fn[:-4]))
+        else:
+            self.files = sorted(files)
+        self.idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.idx >= len(self.files):
+            raise StopIteration
+        frame = cv2.imread(join(self.directory, self.files[self.idx]))
+        self.idx += 1
+        return frame
+
+    def forward(self, frames=200):
+        self.idx += frames
 
 
 class OCVSource:
@@ -31,96 +55,124 @@ class OCVSource:
 
 class Annotation:
     """Object of this class consists of annotation data and interface methods."""
-    def __init__(self, model_name=None, device=None):
+    def __init__(self, model_name: Optional[str] = None, device=None):
         self.model_name = model_name
         self.device = device
         self.model = None
-        self.update_model()
+        if model_name is not None:
+            self.update_model()
 
     def update_model(self):
         self.model = load_model(self.model_name, device=self.device)
 
-    def process(self, frame:np.ndarray):
+    def process(self, frame: np.ndarray):
         raise NotImplementedError
 
     def clear(self):
         return
 
-    def save(self, fn):
+    def save(self, fn: str) -> bool:
         raise NotImplementedError
 
-    def on_key(self, key):
+    def on_key(self, key) -> bool:
         return False
 
-    def visualize(self, image, x, y):
+    def visualize(self, image: np.ndarray, cursor: Optional[Tuple[int, int]]):
         raise NotImplementedError
 
-    def on_move(self, x, y):
+    def on_move(self, x: int, y: int):
         ...
+
+    def on_left_down(self, x: int, y: int):
+        ...
+
+    def on_right_down(self, x: int, y: int):
+        ...
+
+    def on_left_up(self, x: int, y: int):
+        ...
+
+    def on_right_up(self, x: int, y: int):
+        ...
+
+
+class SegAnnotation(Annotation):
+    def __init__(self, channels=3, radius=10):
+        super().__init__()
+        if type(channels) is int:
+            channels = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255))[:channels]
+        self.channels = np.array(channels, dtype=np.uint8)
+        self.active_channel = 0
+        self.mask = None
+        self.keys = {ord('1') + c: c for c in range(len(channels))}
+        self.start_pos = None
+        self.radius = radius
+
+    def on_key(self, key):
+        c = self.keys.get(key, None)
+        if c is not None:
+            self.active_channel = c
+        elif key == ord('='):
+            self.radius += 1
+        elif key == ord('-'):
+            if self.radius > 1:
+                self.radius -= 1
+        else:
+            return False
+        return True
+
+    def circle(self, x, y, col):
+        mask = self.mask[:, :, self.active_channel]
+        mm = mask.copy()
+        cv2.circle(mm, (x, y), self.radius, (col,), -1)
+        mask[:] = mm
+
+    def line(self, x, y, col):
+        mask = self.mask[:, :, self.active_channel]
+        mm = mask.copy()
+        cv2.line(mm, self.start_pos, (x, y), (col,), thickness=self.radius * 2)
+        mask[:] = mm
 
     def on_left_down(self, x, y):
-        ...
+        self.circle(x, y, 255)
+        self.start_pos = x, y
 
-    def on_right_down(self, x, y):
-        ...
+    def on_left_up(self, x: int, y: int):
+        self.circle(x, y, 255)
+        self.line(x, y, 255)
 
-    def on_left_up(self, x, y):
-        ...
+    def on_right_down(self, x: int, y: int):
+        self.circle(x, y, 0)
+        self.start_pos = x, y
 
-    def on_right_up(self, x, y):
-        ...
+    def on_right_up(self, x: int, y: int):
+        self.circle(x, y, 0)
+        self.line(x, y, 0)
 
+    def visualize(self, image: np.ndarray, cursor):
+        if self.mask is None:
+            shape = image.shape[:2]
+            self.mask = np.zeros(shape + (len(self.channels),), dtype=image.dtype)
+        mask = (np.expand_dims(self.mask, 3).astype(np.float32) * self.channels).sum(2) / 255
+        image[:] = np.clip(image + mask, 0, 255).astype(np.uint8)
+        if cursor is not None:
+            x, y = cursor
+            cv2.circle(image, (x, y), self.radius, (255, 255, 255), -1)
 
-class EggAnnotation(Annotation):
-    def __init__(self):
-        super().__init__()
+    def save(self, fn: str):
+        if len(self.channels) > 3:
+            raise NotImplementedError
+        mask = self.mask
+        # if len(mask.shape) == 3 and mask.shape[2] in ['2']:
+        cv2.imwrite(fn + '.png', mask)
+        return True
 
-    def get_handler(self):
-        padding, rs = self.reduction
-        scale = self.scale
-        ss = scale * rs
-
-        def rx(x):
-            return (x // scale - padding) // rs
-
-        def ry(x):
-            return (x // scale - padding) // rs
-
-        def circle(x, y, col):
-            mask, mode = self.mask, self.mode - 1
-            mm = mask[..., mode].copy()
-            cv2.circle(mm, (rx(x), ry(y)), self.radius // ss, (col,), -1)
-            mask[..., mode] = mm
-            # mask[..., 3] = 255 - np.max(mask[..., :3], -1)
-
-        def line(x, y, col):
-            mask, mode = self.mask, self.mode - 1
-            mm = mask[..., mode].copy()
-            cv2.line(mm, self.start_pos, (rx(x), ry(y)), (col,), thickness=self.radius * 2 // ss)
-            mask[..., mode] = mm
-            # mask[..., 3] = 255 - np.max(mask[..., :3], -1)
-
-        def handler(event, x, y, flags, param):
-            if event == cv2.EVENT_LBUTTONDOWN:
-                circle(x, y, 255)
-                self.start_pos = rx(x), ry(y)
-            elif event == cv2.EVENT_LBUTTONUP:
-                circle(x, y, 255)
-                line(x, y, 255)
-
-            elif event == cv2.EVENT_RBUTTONDOWN:
-                circle(x, y, 0)
-                self.start_pos = rx(x), ry(y)
-            elif event == cv2.EVENT_RBUTTONUP:
-                circle(x, y, 0)
-                line(x, y, 0)
-            else:
-                self.cursor = x, y
-        return handler
+    def clear(self):
+        self.mask[:] = 0
 
 
 class AnnoPlayer:
-    def __init__(self, save_dir, annotation: Annotation, view_crop=None, scale=1, reduction=(0, 1), name='Image', radius=10, show_mask=True, roi_size=None):
+    def __init__(self, save_dir, annotation: Annotation, view_crop=None, scale=1, reduction=(0, 1), name='Image', show_mask=True, roi_size=None):
         self.anno: Annotation = annotation
         self.img_map = {}
         self.xxhash = xxhash.xxh64()
@@ -132,7 +184,6 @@ class AnnoPlayer:
         self.scale = scale
         self.reduction = reduction
         self.name = name
-        self.radius = radius
         self.roi_size = roi_size
         self.roi = None
         self.mode = 1
@@ -149,7 +200,7 @@ class AnnoPlayer:
             ys, xs = self.view_crop
             x += xs.start
             y += ys.start
-
+        self.cursor = x, y
         if event == cv2.EVENT_LBUTTONDOWN:
             self.anno.on_left_down(x, y)
         elif event == cv2.EVENT_LBUTTONUP:
@@ -158,7 +209,7 @@ class AnnoPlayer:
             self.anno.on_right_down(x, y)
         elif event == cv2.EVENT_RBUTTONUP:
             self.anno.on_right_up(x, y)
-        else:
+        elif event == cv2.EVENT_MOUSEMOVE:
             self.anno.on_move(x, y)
 
     def get_roi(self):
@@ -220,7 +271,7 @@ class AnnoPlayer:
         image = (frame & mask[..., :3]) | (frame & alpha) if self.show_mask else frame
         if mask.shape[-1] == 1:
             image[:, :, 0] |= mask[:, :, 0]
-        self.anno.visualize(image, 0, 0)
+        self.anno.visualize(image, self.cursor)
         if self.view_crop:
             image = image[self.view_crop]
 
@@ -228,9 +279,6 @@ class AnnoPlayer:
             writer.write(mask)
 
         scale = self.scale
-        if self.cursor:
-            x, y = self.cursor
-            cv2.circle(image, (x // scale, y // scale), self.radius, (0, 0, 255), -1)
 
         if scale != 1:
             h, w, c = frame.shape
@@ -320,21 +368,8 @@ class AnnoPlayer:
                             break
                         except Exception as e:
                             print(f'Exception: {e}')
-            elif k == ord('1'):
-                self.mode = 1
-            elif k == ord('2'):
-                self.mode = 2
-            elif k == ord('3'):
-                self.mode = 3
             elif k == ord('r'):
                 self.anno.clear()
-                self.mask[:] = 0
-                #self.mask[..., 3] = 255
-            elif k == ord('='):
-                self.radius += 1
-            elif k == ord('-'):
-                if self.radius > 1:
-                    self.radius -= 1
             elif k == ord('l'):
                 self.mask = self.last_mask
             elif k == ord('s'):
