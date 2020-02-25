@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 import xxhash
 
-from torch_model import scale_with_padding, load_model
+from torch_model import scale_with_padding, load_model, process_image
 
 class PNGSource:
     """Simple OpenCV source"""
@@ -97,11 +97,12 @@ class Annotation:
 
 
 class SegAnnotation(Annotation):
-    def __init__(self, channels=3, radius=10):
-        super().__init__()
+    def __init__(self, channels=3, model_name: Optional[str] = None, device=None, radius=10, opacity: float = 0.7):
+        super().__init__(model_name, device)
         if type(channels) is int:
             channels = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255))[:channels]
         self.channels = np.array(channels, dtype=np.uint8)
+        self.opacity = opacity
         self.active_channel = 0
         self.mask = None
         self.keys = {ord('1') + c: c for c in range(len(channels))}
@@ -153,11 +154,14 @@ class SegAnnotation(Annotation):
         if self.mask is None:
             shape = image.shape[:2]
             self.mask = np.zeros(shape + (len(self.channels),), dtype=image.dtype)
-        mask = (np.expand_dims(self.mask, 3).astype(np.float32) * self.channels).sum(2) / 255
+        mask = (np.expand_dims(self.mask, 3).astype(np.float32) * self.channels).sum(2) * (self.opacity / 255)
         image[:] = np.clip(image + mask, 0, 255).astype(np.uint8)
         if cursor is not None:
             x, y = cursor
             cv2.circle(image, (x, y), self.radius, (255, 255, 255), -1)
+
+    def process(self, frame: np.ndarray):
+        self.mask = process_image(frame, self.model)
 
     def save(self, fn: str):
         if len(self.channels) > 3:
