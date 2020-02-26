@@ -203,13 +203,15 @@ class AnnoPlayer:
         self.roi_size = roi_size
         self.roi = None
         self.mode = 1
-        self.show_mask = show_mask, 
+        self.hide = False
         self.frame_name = None
         cv2.namedWindow(name, cv2.WINDOW_GUI_NORMAL)
         cv2.setMouseCallback(name, self.handler)
         self.mask: Optional[np.ndarray] = None
         self.frame = None
         self.cursor = None
+        self.pause = True
+        self.use_model = False
 
     def handler(self, event, x, y, flags, param):
         if self.view_crop:
@@ -279,7 +281,7 @@ class AnnoPlayer:
         #mask[..., 3] = 255
         return mask
 
-    def show(self, frame_no: int, show_mask=False, writer=None):
+    def show(self, frame_no: int, writer=None):
         frame, mask, reduce = self.frame, self.mask, self.reduction
         if len(frame.shape) == 2:
             frame = np.expand_dims(frame, -1)
@@ -287,10 +289,12 @@ class AnnoPlayer:
             p, s = reduce
             mask = scale_with_padding(frame.shape, mask, s)
         alpha = 255 - np.max(mask[..., :3], -1, keepdims=True)
-        image = (frame & mask[..., :3]) | (frame & alpha) if self.show_mask else frame
+        image = frame.copy()
         if mask.shape[-1] == 1:
             image[:, :, 0] |= mask[:, :, 0]
-        self.anno.visualize(image, self.cursor, frame_no)
+        if not self.hide:
+            self.anno.visualize(image, self.cursor, frame_no)
+
         if self.view_crop:
             image = image[self.view_crop]
 
@@ -305,19 +309,25 @@ class AnnoPlayer:
 
         if self.frame_name:
             cv2.putText(image, self.frame_name, (20, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (128, 255, 128))
-        if show_mask:
-            cv2.imshow('mask', mask[..., :3])
+        if self.hide:
+            cv2.putText(image, 'H', (image.shape[1] - 40, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
+        if self.pause:
+            cv2.putText(image, 'P', (image.shape[1] - 70, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
+        if self.use_model:
+            cv2.putText(image, 'M', (image.shape[1] - 100, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
+
         if self.roi:
             p1, p2 = self.get_roi()
             cv2.rectangle(image, p1, p2, (0, 255, 128))
         cv2.imshow(self.name, image)
 
     def play(self, source, prepare=None, use_model=False, update=None, writer=None, delay=1):
-        pause, read_one = True, True
+        self.use_model = use_model
+        self.pause, read_one = True, True
         frame, frame_no = None, None
 
         while True:
-            if not pause or read_one:
+            if not self.pause or read_one:
                 try:
                     frame_no = source.frame_no()
                     frame = next(source)
@@ -331,13 +341,13 @@ class AnnoPlayer:
                 except StopIteration:
                     break
                 self.frame = frame
-                if use_model:
+                if self.use_model:
                     self.anno.process(frame)
                 result = self.zero_mask(frame) # self.anno.process(frame) if use_model else
                 if type(result) is tuple:
                     self.mask, is_bad = result
                     if is_bad and self.frame_name is None:
-                        pause = True
+                        self.pause = True
                 else:
                     self.mask = result
                 if self.mask.shape[-1] < 3:
@@ -349,7 +359,7 @@ class AnnoPlayer:
                 read_one = False
                 self.roi = None
 
-            self.show(frame_no, writer=None if pause else writer)
+            self.show(frame_no, writer=None if self.pause else writer)
             k = cv2.waitKey(delay)
             if k == -1 or self.anno.on_key(k):
                 continue
@@ -362,14 +372,13 @@ class AnnoPlayer:
             elif k == ord('i'):
                 self.roi = self.cursor
             elif k == ord('p'):
-                pause = not pause
+                self.pause = not self.pause
             elif k == ord('b'):
                 source.back()
                 read_one = True
             elif k == ord('m'):
-                use_model = not use_model
-                # self.mask = \
-                self.anno.process(frame) if use_model else self.zero_mask(frame)
+                self.use_model = not self.use_model
+                self.anno.process(frame) if self.use_model else self.zero_mask(frame)
                 if type(self.mask) is tuple:
                     self.mask, is_bad = self.mask
                 if self.mask.shape[-1] < 3:
@@ -379,6 +388,8 @@ class AnnoPlayer:
                     )
             elif k == ord('n'):
                 read_one = True
+            elif k == ord('h'):
+                self.hide = not self.hide
             elif k == ord('f'):
                 source.forward()
                 read_one = True
