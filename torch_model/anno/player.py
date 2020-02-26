@@ -58,6 +58,9 @@ class OCVSource:
     def forward(self, frames=200):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) + frames)
 
+    def back(self, frames=1):
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) - frames - 1)
+
     def frame_no(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
