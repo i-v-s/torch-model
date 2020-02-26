@@ -38,7 +38,7 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     if not isfile(weights_fn):
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)
     if isfile(weights_fn):
-        model.load_state_dict(torch.load(weights_fn))
+        model.load_state_dict(torch.load(weights_fn, map_location=device))
         if verbose:
             print(f'Loaded model weights from {abspath(weights_fn)}')
     if n_classes is not None and n_classes > params['n_classes']:

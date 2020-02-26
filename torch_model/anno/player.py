@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 
 from os import mkdir, listdir
-from os.path import isdir, isfile, join
+from os.path import isdir, isfile, join, splitext
 
 import numpy as np
 import cv2
@@ -33,6 +33,12 @@ class PNGSource:
     def forward(self, frames=200):
         self.idx += frames
 
+    def back(self, frames=1):
+        self.idx -= frames + 1
+
+    def frame_no(self) -> int:
+        return self.idx
+
 
 class OCVSource:
     """Simple OpenCV source"""
@@ -51,6 +57,9 @@ class OCVSource:
 
     def forward(self, frames=200):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) + frames)
+
+    def frame_no(self) -> int:
+        return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
 
 class Annotation:
@@ -74,10 +83,13 @@ class Annotation:
     def save(self, fn: str) -> bool:
         raise NotImplementedError
 
+    def load(self, fn: str):
+        ...
+
     def on_key(self, key) -> bool:
         return False
 
-    def visualize(self, image: np.ndarray, cursor: Optional[Tuple[int, int]]):
+    def visualize(self, image: np.ndarray, cursor: Optional[Tuple[int, int]], frame_no: int):
         raise NotImplementedError
 
     def on_move(self, x: int, y: int):
@@ -247,13 +259,16 @@ class AnnoPlayer:
             mkdir(masks)
 
     def save(self, frame, mask, directory):
-        index = 1
-        while isfile(join(directory, 'images', f'{index:04d}.png')):
-            index += 1
-        fn = f'{index:04d}'
-        #self.img_map[self.hash(frame)] = fn
+        if self.frame_name is not None:
+            fn = splitext(self.frame_name)[0]
+        else:
+            index = 1
+            while isfile(join(directory, 'images', f'{index:04d}.png')):
+                index += 1
+            fn = f'{index:04d}'
         if self.anno.save(join(directory, 'masks', fn)):
             cv2.imwrite(join(directory, 'images', fn + '.png'), frame)
+            self.img_map[self.hash(frame)] = fn
         #cv2.imwrite(join(directory, 'masks', fn + '.png'), mask[..., :3])
         self.last_mask = mask
 
@@ -264,7 +279,7 @@ class AnnoPlayer:
         #mask[..., 3] = 255
         return mask
 
-    def show(self, show_mask=False, writer=None):
+    def show(self, frame_no: int, show_mask=False, writer=None):
         frame, mask, reduce = self.frame, self.mask, self.reduction
         if len(frame.shape) == 2:
             frame = np.expand_dims(frame, -1)
@@ -275,7 +290,7 @@ class AnnoPlayer:
         image = (frame & mask[..., :3]) | (frame & alpha) if self.show_mask else frame
         if mask.shape[-1] == 1:
             image[:, :, 0] |= mask[:, :, 0]
-        self.anno.visualize(image, self.cursor)
+        self.anno.visualize(image, self.cursor, frame_no)
         if self.view_crop:
             image = image[self.view_crop]
 
@@ -299,15 +314,18 @@ class AnnoPlayer:
 
     def play(self, source, prepare=None, use_model=False, update=None, writer=None, delay=1):
         pause, read_one = True, True
-        frame = None
+        frame, frame_no = None, None
 
         while True:
             if not pause or read_one:
                 try:
+                    frame_no = source.frame_no()
                     frame = next(source)
                     if prepare is not None:
                         frame = prepare(frame)
                     self.frame_name = self.img_map.get(self.hash(frame), None)
+                    if self.frame_name is not None:
+                        self.anno.load(join(self.save_dir, 'masks', splitext(self.frame_name)[0]))
                     # if self.frame_name:
                     #    pause = True
                 except StopIteration:
@@ -331,7 +349,7 @@ class AnnoPlayer:
                 read_one = False
                 self.roi = None
 
-            self.show(writer=None if pause else writer)
+            self.show(frame_no, writer=None if pause else writer)
             k = cv2.waitKey(delay)
             if k == -1 or self.anno.on_key(k):
                 continue
@@ -359,10 +377,10 @@ class AnnoPlayer:
                         (self.mask, np.zeros(self.mask.shape[:2] + (3 - self.mask.shape[-1],), dtype=np.uint8)),
                         axis=-1
                     )
-
+            elif k == ord('n'):
+                read_one = True
             elif k == ord('f'):
                 source.forward()
-                #cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no + 1)
                 read_one = True
             elif k == ord('u'):
                 if update:
