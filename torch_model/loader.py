@@ -261,7 +261,7 @@ global_modules = {
 
 
 def module_dec(name, module):
-    params = module['params']
+    params = module.get('params', [])
     def wrapper(shape, *args, loader_info: LoaderInfo = None):
         modules, values, verbose, indent = loader_info
         values = copy(values)
