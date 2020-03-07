@@ -39,6 +39,9 @@ class PNGSource:
     def frame_no(self) -> int:
         return self.idx
 
+    def __len__(self) -> int:
+        return len(self.files)
+
 
 class OCVSource:
     """Simple OpenCV source"""
@@ -63,6 +66,9 @@ class OCVSource:
 
     def frame_no(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+
+    def __len__(self) -> int:
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 
 class Annotation:
