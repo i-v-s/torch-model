@@ -1,6 +1,7 @@
 from os import listdir
 from os.path import isfile, isdir, join, splitext
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
+from fractions import Fraction
 
 import cv2
 
@@ -14,7 +15,8 @@ class ParallelDataset(Dataset):
                  aug=None,
                  extensions=('.png', '.jpeg'),
                  loaders: Optional[Dict[str, Any]] = None,
-                 post_proc=None
+                 post_proc=None,
+                 file_filter=None
                  ):
         super().__init__()
         self.root_dir = root_dir
@@ -24,6 +26,25 @@ class ParallelDataset(Dataset):
         self.items = []
         self.extensions = extensions
         self.post_proc = post_proc
+        self.file_filter = file_filter
+
+    @classmethod
+    def create_pair(cls, *args,
+                    aug=None, eval_aug=None,
+                    fraction: Fraction = Fraction(1, 7),
+                    **kwargs) -> Tuple[Dataset, Dataset]:
+        """
+        Divides all samples by two datasets: training and evaluation. Disables augmentation for evaluation
+        :param aug:
+        :param args:
+        :param fraction: Part of evaluation data
+        :param kwargs:
+        :return:
+        """
+        return (
+            cls(*args, **kwargs, aug=aug, file_filter=lambda i, f: i % fraction.denominator >= fraction.numerator),
+            cls(*args, **kwargs, aug=eval_aug, file_filter=lambda i, f: i % fraction.denominator < fraction.numerator)
+        )
 
     def find_item(self, fn):
         fn = splitext(fn)[0]
@@ -33,13 +54,19 @@ class ParallelDataset(Dataset):
         raise FileNotFoundError
 
     def update(self):
+        files = (
+            fn
+            for fn in sorted(listdir(join(self.root_dir, self.classes[0])))
+            if isfile(join(self.root_dir, self.classes[0], fn)) and any(map(fn.endswith, self.extensions))
+        )
+        if self.file_filter is not None:
+            files = (f for i, f in enumerate(files) if self.file_filter(i, f))
         self.items = [
             (join(self.root_dir, self.classes[0], fn),) + tuple(
                 self.find_item(join(self.root_dir, cl, fn))
                 for cl in self.classes[1:]
             )
-            for fn in listdir(join(self.root_dir, self.classes[0]))
-            if isfile(join(self.root_dir, self.classes[0], fn)) and any(map(fn.endswith, self.extensions))
+            for fn in files
         ]
 
     def __len__(self):
