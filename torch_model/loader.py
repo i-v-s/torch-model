@@ -9,6 +9,7 @@ from .blocks import Conv
 from .wavenet import WaveStart, WaveCell, WaveReset, WaveEnd
 import yaml
 
+
 class LoaderInfo(NamedTuple):
     modules: dict
     values: dict
@@ -87,6 +88,16 @@ def maxpool2d(shape, *args, loader_info=None, **kwargs):
     return (n, c, h, w), pool
 
 
+def maxpool3d(shape, *args, loader_info=None, **kwargs):
+    n, c, d, h, w = shape
+    pool = nn.MaxPool3d(*args, **kwargs)
+    d, h, w = (
+        (v + 2 * el(pool.padding, i) - el(pool.dilation, i) * (el(pool.kernel_size, i) - 1) - 1) // el(pool.stride, i) + 1
+        for i, v in enumerate((d, h, w))
+    )
+    return (n, c, d, h, w), pool
+
+
 def conv1d(shape, out_channels, *args, loader_info=None, **kwargs):
     n, c, l = shape
     conv = nn.Conv1d(c, out_channels, *args, **kwargs)
@@ -102,6 +113,16 @@ def conv2d(shape, out_channels, *args, loader_info=None, **kwargs):
         for i, v in enumerate((h, w))
     )
     return (n, out_channels, h, w), conv
+
+
+def conv3d(shape, out_channels, *args, loader_info=None, **kwargs):
+    n, c, d, h, w = shape
+    conv = nn.Conv3d(c, out_channels, *args, **kwargs)
+    d, h, w = (
+        (v + 2 * conv.padding[i] - conv.dilation[i] * (conv.kernel_size[i] - 1) - 1) // conv.stride[i] + 1
+        for i, v in enumerate((d, h, w))
+    )
+    return (n, out_channels, d, h, w), conv
 
 
 def convT2d(shape, out_channels, *args, loader_info=None, **kwargs):
@@ -177,6 +198,11 @@ def bn2d(shape, *args, loader_info=None, **kwargs):
     return shape, nn.BatchNorm2d(shape[1], *args, **kwargs)
 
 
+def bn3d(shape, *args, loader_info=None, **kwargs):
+    assert len(shape) == 5
+    return shape, nn.BatchNorm3d(shape[1], *args, **kwargs)
+
+
 def parse_params(params, values):
     args = []
     kwargs = {}
@@ -249,11 +275,12 @@ def container(module, module_name, shape_calc=None):
 
 
 global_modules = {
-    'conv1d': conv1d, 'conv2d': conv2d, 'convt1d': convT1d, 'convt2d': convT2d, 'conv': Conv, 'maxpool2d': maxpool2d,
+    'conv1d': conv1d, 'conv2d': conv2d, 'conv3d': conv3d, 'convt1d': convT1d, 'convt2d': convT2d,
+    'conv': Conv, 'maxpool2d': maxpool2d, 'mp2d': maxpool2d, 'maxpool3d': maxpool3d, 'mp3d': maxpool3d,
     'flatten': flatten, 'reshape': reshape, 'permute': permute,
     'linear': linear, 'max': Aggregate.create(torch.max),
     'relu': simple(nn.ReLU), 'prelu': simple(nn.PReLU), 'lrelu': simple(nn.LeakyReLU), 'sigmoid': simple(nn.Sigmoid),
-    'dropout': simple(nn.Dropout), 'bn2d': bn2d,
+    'dropout': simple(nn.Dropout), 'bn2d': bn2d, 'bn3d': bn3d,
     'nop': nop, 'add': container(Add, 'add', add_shape_calc), 'seq': container(nn.Sequential, 'seq'),
     'tuple': container(TupleProc, 'tuple', tuple_shape_calc),
     'wn_start': WaveStart.create, 'wn_cell': WaveCell.create, 'wn_reset': WaveReset.create, 'wn_end': WaveEnd.create
@@ -262,6 +289,7 @@ global_modules = {
 
 def module_dec(name, module):
     params = module.get('params', [])
+
     def wrapper(shape, *args, loader_info: LoaderInfo = None):
         modules, values, verbose, indent = loader_info
         values = copy(values)
