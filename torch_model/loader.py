@@ -280,7 +280,8 @@ global_modules = {
     'flatten': flatten, 'reshape': reshape, 'permute': permute,
     'linear': linear, 'max': Aggregate.create(torch.max),
     'relu': simple(nn.ReLU), 'prelu': simple(nn.PReLU), 'lrelu': simple(nn.LeakyReLU), 'sigmoid': simple(nn.Sigmoid),
-    'dropout': simple(nn.Dropout), 'bn2d': bn2d, 'bn3d': bn3d,
+    'dropout': simple(nn.Dropout), 'do2d': simple(nn.Dropout2d), 'do3d': simple(nn.Dropout3d),
+    'bn2d': bn2d, 'bn3d': bn3d,
     'nop': nop, 'add': container(Add, 'add', add_shape_calc), 'seq': container(nn.Sequential, 'seq'),
     'tuple': container(TupleProc, 'tuple', tuple_shape_calc),
     'wn_start': WaveStart.create, 'wn_cell': WaveCell.create, 'wn_reset': WaveReset.create, 'wn_end': WaveEnd.create
