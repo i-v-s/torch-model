@@ -44,6 +44,7 @@ class RandomSource:
 class PNGSource:
     """Simple OpenCV source"""
     def __init__(self, directory, num_sort=True):
+        self.url = directory
         self.directory = directory
         files = [fn for fn in listdir(directory) if fn.endswith('.png') and isfile(join(directory, fn))]
         if num_sort:
@@ -79,6 +80,7 @@ class PNGSource:
 class OCVSource:
     """Simple OpenCV source"""
     def __init__(self, url):
+        self.url = url
         self.cap = cv2.VideoCapture(url)
 
     def __iter__(self):
@@ -99,6 +101,9 @@ class OCVSource:
 
     def frame_no(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+
+    def set_frame_no(self, frame_no: int):
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
 
     def __len__(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))

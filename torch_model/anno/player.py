@@ -16,6 +16,7 @@ class Annotation:
         self.model_name = model_name
         self.device = device
         self.model = None
+        self.player = None
         if model_name is not None:
             self.update_model()
 
@@ -24,6 +25,9 @@ class Annotation:
 
     def process(self, frame: np.ndarray):
         raise NotImplementedError
+
+    def set_player(self, player):
+        self.player = player
 
     def clear(self):
         return
@@ -138,6 +142,7 @@ class SegAnnotation(Annotation):
 class AnnoPlayer:
     def __init__(self, save_dir, annotation: Annotation, view_crop=None, scale=1, reduction=(0, 1), name='Image', show_mask=True, roi_size=None):
         self.anno: Annotation = annotation
+        annotation.set_player(self)
         self.img_map = {}
         self.xxhash = xxhash.xxh64()
         self.save_dir = save_dir
@@ -160,6 +165,7 @@ class AnnoPlayer:
         self.cursor = None
         self.pause = True
         self.use_model = False
+        self.source = None
 
     def handler(self, event, x, y, flags, param):
         if self.view_crop:
@@ -271,6 +277,7 @@ class AnnoPlayer:
 
     def play(self, source, prepare=None, use_model=False, update=None, writer=None, delay=1):
         self.use_model = use_model
+        self.source = source
         self.pause, read_one = True, True
         frame, frame_no = None, None
 
