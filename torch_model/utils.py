@@ -22,13 +22,14 @@ optimizers = {
 }
 
 
-def load_model(name, train=False, directory='models', device=None, best=False, n_classes=None, verbose=False):
+def load_model(name, train=False, directory='models', device=None, best=False, n_classes=None, verbose=False, **params):
     model_dir = join(directory, name)
     if not isdir(model_dir):
         mkdir(model_dir)
     if isfile(join('models', '%s.yaml' % name)):
-        model = load_yaml(join('models', '%s.yaml' % name))
+        model = load_yaml(join('models', '%s.yaml' % name), **params)
     else:
+        assert not params
         with open(join('models', '%s.json' % name)) as f:
             params = json.load(f)
         model_type = params['type']

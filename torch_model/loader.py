@@ -310,18 +310,20 @@ def update_modules(modules, new_modules):
         modules[name] = module_dec(name, item)
 
 
-def load_yaml(fn, verbose=True):
+def load_yaml(fn, verbose=True, **params):
     with open(fn, 'r') as file:
         conf = yaml.safe_load(file)
     modules = copy(global_modules)
     if 'modules' in conf:
         update_modules(modules, conf['modules'])
     model_conf = conf['model']
-    input_shape = tuple(model_conf['input'])
+    params = params.copy()
     classes = model_conf['classes']
+    params['classes'] = classes if type(classes) is int else len(classes)
+    input_shape = tuple(params.get(i, i) for i in model_conf['input'])
     output_shape, model = modules['seq'](
         input_shape, model_conf['seq'],
-        LoaderInfo(modules, {'classes': classes if type(classes) is int else len(classes)}, verbose),
+        LoaderInfo(modules, params, verbose),
         seq_name=''
     )
     setattr(model, 'classes', model_conf['classes'])
