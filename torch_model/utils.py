@@ -27,7 +27,7 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     if not isdir(model_dir):
         mkdir(model_dir)
     if isfile(join('models', '%s.yaml' % name)):
-        model = load_yaml(join('models', '%s.yaml' % name), **params)
+        model = load_yaml(join('models', '%s.yaml' % name), name, **params)
     else:
         assert not params
         with open(join('models', '%s.json' % name)) as f:

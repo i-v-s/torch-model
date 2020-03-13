@@ -310,7 +310,7 @@ def update_modules(modules, new_modules):
         modules[name] = module_dec(name, item)
 
 
-def load_yaml(fn, verbose=True, **params):
+def load_yaml(fn, name, verbose=True, **params):
     with open(fn, 'r') as file:
         conf = yaml.safe_load(file)
     modules = copy(global_modules)
@@ -324,7 +324,7 @@ def load_yaml(fn, verbose=True, **params):
     output_shape, model = modules['seq'](
         input_shape, model_conf['seq'],
         LoaderInfo(modules, params, verbose),
-        seq_name=''
+        seq_name=name
     )
     setattr(model, 'classes', model_conf['classes'])
     return model
