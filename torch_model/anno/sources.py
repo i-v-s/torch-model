@@ -79,15 +79,21 @@ class PNGSource:
 
 class OCVSource:
     """Simple OpenCV source"""
-    def __init__(self, url):
+    def __init__(self, url, clip: slice = None):
         self.url = url
         self.cap = cv2.VideoCapture(url)
+        if clip is None:
+            clip = slice(0, None)
+        self.clip = clip
+        self.set_frame_no(0)
 
     def __iter__(self):
         return self
 
     def __next__(self):
         while True:
+            if self.clip.stop is not None and int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) >= self.clip.stop:
+                raise StopIteration
             flag, frame = self.cap.read()
             if not flag:
                 raise StopIteration
@@ -99,11 +105,18 @@ class OCVSource:
     def back(self, frames=1):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) - frames - 1)
 
+    def fps(self):
+        return self.cap.get(cv2.CAP_PROP_FPS)
+
     def frame_no(self) -> int:
-        return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - (self.clip.start or 0)
 
     def set_frame_no(self, frame_no: int):
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no + (self.clip.start or 0))
 
     def __len__(self) -> int:
-        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        c = self.clip
+        if c.stop is not None:
+            return c.stop - (c.start or 0)
+        else:
+            return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
