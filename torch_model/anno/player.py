@@ -114,7 +114,7 @@ class SegAnnotation(Annotation):
         self.circle(x, y, 0)
         self.line(x, y, 0)
 
-    def visualize(self, image: np.ndarray, cursor):
+    def visualize(self, image: np.ndarray, cursor, frame_no):
         if self.mask is None:
             shape = image.shape[:2]
             self.mask = np.zeros(shape + (len(self.channels),), dtype=image.dtype)
@@ -207,7 +207,7 @@ class AnnoPlayer:
             self.img_map = {
                 self.hash(cv2.imread(join(images, fn))): fn
                 for fn in listdir(images)
-                if isfile(join(images, fn))
+                if fn.endswith('.png') and isfile(join(images, fn))
             }
         else:
             mkdir(images)

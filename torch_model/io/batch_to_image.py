@@ -7,7 +7,7 @@ def batch_to_images(batch, to_np=True):
     return np.moveaxis(batch.cpu().numpy(), 1, -1) if to_np else batch
 
 
-def batch_to_masks(batch, threshold=None, with_alpha=False):
+def batch_to_masks(batch, threshold=0.5, with_alpha=False):
     if with_alpha:
         batch = ((batch[:, :-1] > batch[:, -1:]) & (batch[:, :-1] > threshold)).to(torch.uint8) * 255
     else:
