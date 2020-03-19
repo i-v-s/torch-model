@@ -1,16 +1,22 @@
-import cv2
 import json
+import xxhash
+
+from typing import Tuple
 from os.path import join, isfile, isdir, abspath
 from os import mkdir
-from typing import Tuple
-from . import UNet
+
+import cv2
 import numpy as np
+
 import torch
 from torch.nn import Module
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta
+
 from .loader import load_yaml
 from .io import batch_to_masks, images_to_batch
 from .trainer import Trainer
+from . import UNet
+
 
 models = {'unet': UNet}
 optimizers = {
@@ -146,3 +152,12 @@ def un_scale(target_shape: Tuple[int, int, int], source: np.ndarray, scale: int)
     sx, sy = (sw - tw * scale) // 2, (sh - th * scale) // 2
     source = source[sy:sy + th * scale, sx:sx + tw * scale]
     return cv2.resize(source, (tw, th))
+
+
+def image_hash():
+    xh = xxhash.xxh64()
+    def wrapper(x):
+        xh.reset()
+        xh.update(x)
+        return xh.hexdigest()
+    return wrapper

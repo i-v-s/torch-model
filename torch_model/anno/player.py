@@ -138,6 +138,9 @@ class SegAnnotation(Annotation):
     def clear(self):
         self.mask[:] = 0
 
+    def load(self, fn: str):
+        self.mask = cv2.imread(fn + '.png')
+
 
 class AnnoPlayer:
     def __init__(self, save_dir, annotation: Annotation, view_crop=None, scale=1, reduction=(0, 1), name='Image', show_mask=True, roi_size=None):
