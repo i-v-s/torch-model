@@ -78,6 +78,9 @@ class ParallelDataset(Dataset):
             self.loaders.get(cl, cv2.imread)(fn)
             for cl, fn in zip(self.classes, self.items[item])
         ]
+        for data, fn in zip(items, self.items[item]):
+            if data is None:
+                raise RuntimeError(f'Unable to load {fn}')
         for aug in self.aug:
             aug, image, mask = aug if len(aug) == 3 else (aug + (None,))
             image_idx = self.classes.index(image)
