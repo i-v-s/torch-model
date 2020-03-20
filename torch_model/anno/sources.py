@@ -43,14 +43,14 @@ class RandomSource:
 
 class PNGSource:
     """Simple OpenCV source"""
-    def __init__(self, directory, num_sort=True, sort_key=None):
+    def __init__(self, directory, num_sort=True, sort_key=None, reverse=False):
         self.url = directory
         self.directory = directory
         files = [fn for fn in listdir(directory) if fn.endswith('.png') and isfile(join(directory, fn))]
         if num_sort and sort_key is None:
-            self.files = sorted(files, key=lambda fn: int(fn[:-4]))
+            self.files = sorted(files, key=lambda fn: int(fn[:-4]), reverse=reverse)
         else:
-            self.files = sorted(files, key=sort_key)
+            self.files = sorted(files, key=sort_key, reverse=reverse)
         self.idx = 0
 
     def __iter__(self):
