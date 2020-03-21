@@ -3,6 +3,7 @@ from os.path import isfile, join
 from random import shuffle, randrange
 
 import cv2
+from torch.utils.data import IterableDataset, Dataset
 
 
 class RandomSource:
@@ -41,7 +42,7 @@ class RandomSource:
         return len(self.files)
 
 
-class PNGSource:
+class PNGSource(Dataset):
     """Simple OpenCV source"""
     def __init__(self, directory, num_sort=True, sort_key=None, reverse=False):
         self.url = directory
@@ -77,7 +78,7 @@ class PNGSource:
         return len(self.files)
 
 
-class OCVSource:
+class OCVSource(IterableDataset):
     """Simple OpenCV source"""
     def __init__(self, url, clip: slice = None):
         self.url = url
