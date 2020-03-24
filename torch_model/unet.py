@@ -11,11 +11,12 @@ classes = {'conv2d': nn.Conv2d, 'conv': Conv, 'relu': nn.ReLU}
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, downs, ups, pre=None, with_alpha=False):
+    def __init__(self, n_channels, n_classes, downs, ups, pre=None, with_alpha=False, with_sigmoid=True):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.with_alpha = with_alpha
+        self.with_sigmoid = with_sigmoid
 
         self.reduce = self.calc_reduce(pre)
         self.inc = nn.Sequential(*[
@@ -64,4 +65,4 @@ class UNet(nn.Module):
             x = up(x, xs[i])
 
         x = self.outc(x)
-        return torch.sigmoid(x)
+        return torch.sigmoid(x) if self.with_sigmoid else x

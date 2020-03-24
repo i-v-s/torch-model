@@ -35,12 +35,12 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     if isfile(join('models', '%s.yaml' % name)):
         model = load_yaml(join('models', '%s.yaml' % name), name, **params)
     else:
-        assert not params
         with open(join('models', '%s.json' % name)) as f:
-            params = json.load(f)
-        model_type = params['type']
-        del params['type']
-        model = models[model_type](**params)
+            json_params = json.load(f)
+        model_type = json_params['type']
+        del json_params['type']
+        json_params.update(params)
+        model = models[model_type](**json_params)
     weights_fn = join(model_dir, ('%s_best.pt' if best else '%s.pt') % name)
     if not isfile(weights_fn):
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)
