@@ -4,13 +4,13 @@ import torch.nn.functional as F
 
 
 class Conv(nn.Module):
-    def __init__(self, in_ch, out_ch, layers=2):
+    def __init__(self, in_ch, out_ch, layers=2, lrelu=None):
         super(Conv, self).__init__()
         self.conv = nn.Sequential(
             *sum([[
                 nn.Conv2d(in_ch if i == 0 else out_ch, out_ch, 3, padding=1),
                 nn.BatchNorm2d(out_ch),
-                nn.ReLU(inplace=True)
+                nn.ReLU(inplace=True) if lrelu is None else nn.LeakyReLU(lrelu, inplace=True)
             ] for i in range(layers)], [])
         )
 
@@ -19,11 +19,11 @@ class Conv(nn.Module):
 
 
 class Down(nn.Module):
-    def __init__(self, in_ch, out_ch, layers=2):
+    def __init__(self, in_ch, out_ch, layers=2, lrelu=None):
         super(Down, self).__init__()
         self.mpconv = nn.Sequential(
             nn.MaxPool2d(2),
-            Conv(in_ch, out_ch, layers)
+            Conv(in_ch, out_ch, layers, lrelu=lrelu)
         )
 
     def forward(self, x):
@@ -32,7 +32,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_ch, out_ch, layers=2, bilinear=True):
+    def __init__(self, in_ch, out_ch, layers=2, bilinear=True, lrelu=None):
         super(Up, self).__init__()
 
         #  would be a nice idea if the upsampling could be learned too,
@@ -42,7 +42,7 @@ class Up(nn.Module):
         else:
             self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
 
-        self.conv = Conv(in_ch, out_ch, layers)
+        self.conv = Conv(in_ch, out_ch, layers, lrelu=lrelu)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)

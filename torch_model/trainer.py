@@ -127,7 +127,7 @@ class Trainer:
         eval_loaders += list(kw_loaders.items())
         if self.tb_writer is not None:
             self.write_hparams(optimizer, train_loader, eval_loaders)
-            self.tb_writer.add_graph(self.model, torch.zeros((1, 3, 512, 96), device='cuda:0'))
+            # self.tb_writer.add_graph(self.model, torch.zeros((1, 3, 512, 96), device='cuda:0'))
 
         while k != ord('q'):
             all_stats = []
