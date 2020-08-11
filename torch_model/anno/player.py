@@ -1,5 +1,4 @@
-from typing import Optional, Tuple
-
+from typing import Optional
 from os import mkdir, listdir
 from os.path import isdir, isfile, join, splitext
 
@@ -7,149 +6,20 @@ import numpy as np
 import cv2
 import xxhash
 
-from torch_model import scale_with_padding, load_model, process_image
-
-
-class Annotation:
-    """Object of this class consists of annotation data and interface methods."""
-    def __init__(self, model_name: Optional[str] = None, device=None):
-        self.model_name = model_name
-        self.device = device
-        self.model = None
-        self.player = None
-        if model_name is not None:
-            self.update_model()
-
-    def update_model(self):
-        self.model = load_model(self.model_name, device=self.device)
-
-    def process(self, frame: np.ndarray):
-        raise NotImplementedError
-
-    def set_player(self, player):
-        self.player = player
-
-    def clear(self):
-        return
-
-    def save(self, fn: str) -> bool:
-        raise NotImplementedError
-
-    def load(self, fn: str):
-        ...
-
-    def on_key(self, key) -> bool:
-        return False
-
-    def visualize(self, image: np.ndarray, cursor: Optional[Tuple[int, int]], frame_no: int):
-        raise NotImplementedError
-
-    def on_move(self, x: int, y: int):
-        ...
-
-    def on_left_down(self, x: int, y: int):
-        ...
-
-    def on_right_down(self, x: int, y: int):
-        ...
-
-    def on_left_up(self, x: int, y: int):
-        ...
-
-    def on_right_up(self, x: int, y: int):
-        ...
-
-
-class SegAnnotation(Annotation):
-    def __init__(self, channels=3, model_name: Optional[str] = None, device=None, radius=10, opacity: float = 0.7):
-        super().__init__(model_name, device)
-        if type(channels) is int:
-            channels = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255))[:channels]
-        self.channels = np.array(channels, dtype=np.uint8)
-        self.opacity = opacity
-        self.active_channel = 0
-        self.mask = None
-        self.keys = {ord('1') + c: c for c in range(len(channels))}
-        self.start_pos = None
-        self.radius = radius
-
-    def on_key(self, key):
-        c = self.keys.get(key, None)
-        if c is not None:
-            self.active_channel = c
-        elif key == ord('='):
-            self.radius += 1
-        elif key == ord('-'):
-            if self.radius > 1:
-                self.radius -= 1
-        else:
-            return False
-        return True
-
-    def circle(self, x, y, col):
-        mask = self.mask[:, :, self.active_channel]
-        mm = mask.copy()
-        cv2.circle(mm, (x, y), self.radius, (col,), -1)
-        mask[:] = mm
-
-    def line(self, x, y, col):
-        mask = self.mask[:, :, self.active_channel]
-        mm = mask.copy()
-        cv2.line(mm, self.start_pos, (x, y), (col,), thickness=self.radius * 2)
-        mask[:] = mm
-
-    def on_left_down(self, x, y):
-        self.circle(x, y, 255)
-        self.start_pos = x, y
-
-    def on_left_up(self, x: int, y: int):
-        self.circle(x, y, 255)
-        self.line(x, y, 255)
-
-    def on_right_down(self, x: int, y: int):
-        self.circle(x, y, 0)
-        self.start_pos = x, y
-
-    def on_right_up(self, x: int, y: int):
-        self.circle(x, y, 0)
-        self.line(x, y, 0)
-
-    def visualize(self, image: np.ndarray, cursor, frame_no):
-        if self.mask is None:
-            shape = image.shape[:2]
-            self.mask = np.zeros(shape + (len(self.channels),), dtype=image.dtype)
-        mask = (np.expand_dims(self.mask, 3).astype(np.float32) * self.channels).sum(2) * (self.opacity / 255)
-        image[:] = np.clip(image + mask, 0, 255).astype(np.uint8)
-        if cursor is not None:
-            x, y = cursor
-            cv2.circle(image, (x, y), self.radius, (255, 255, 255), -1)
-
-    def process(self, frame: np.ndarray):
-        self.mask = process_image(frame, self.model)
-
-    def save(self, fn: str):
-        if len(self.channels) > 3:
-            raise NotImplementedError
-        mask = self.mask
-        # if len(mask.shape) == 3 and mask.shape[2] in ['2']:
-        cv2.imwrite(fn + '.png', mask)
-        return True
-
-    def clear(self):
-        self.mask[:] = 0
-
-    def load(self, fn: str):
-        self.mask = cv2.imread(fn + '.png')
+from torch_model import scale_with_padding
+from .annotation import Annotation
+from .transform import AnnoTransform
 
 
 class AnnoPlayer:
-    def __init__(self, save_dir, annotation: Annotation, view_crop=None, scale=1, reduction=(0, 1), name='Image', show_mask=True, roi_size=None):
+    def __init__(self, save_dir, annotation: Annotation, transform: AnnoTransform = None,
+                 scale=1, reduction=(0, 1), name='Image', show_mask=True, roi_size=None):
         self.anno: Annotation = annotation
         annotation.set_player(self)
         self.img_map = {}
         self.xxhash = xxhash.xxh64()
         self.save_dir = save_dir
-        self.view_crop = view_crop
+        self.transform = transform
         if roi_size is not None:
             self.create_dirs(f'{save_dir}-{roi_size}')
         self.create_dirs(save_dir)
@@ -171,11 +41,7 @@ class AnnoPlayer:
         self.source = None
 
     def handler(self, event, x, y, flags, param):
-        if self.view_crop:
-            ys, xs = self.view_crop
-            x += xs.start
-            y += ys.start
-        self.cursor = x, y
+        self.cursor = self.transform.invert_point(x, y) if self.transform else (x, y)
         if event == cv2.EVENT_LBUTTONDOWN:
             self.anno.on_left_down(x, y)
         elif event == cv2.EVENT_LBUTTONUP:
@@ -252,8 +118,8 @@ class AnnoPlayer:
         if not self.hide:
             self.anno.visualize(image, self.cursor, frame_no)
 
-        if self.view_crop:
-            image = image[self.view_crop]
+        if self.transform:
+            image = self.transform(image)
 
         if writer:
             writer.write(mask)
