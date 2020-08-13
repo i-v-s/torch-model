@@ -1,5 +1,6 @@
+from typing import Iterable
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, isdir, join
 from random import shuffle, randrange
 
 import cv2
@@ -7,24 +8,35 @@ from torch.utils.data import IterableDataset, Dataset
 
 
 class RandomSource:
-    def __init__(self, directory, extensions=('.png', '.mp4')):
+    @staticmethod
+    def get_files(directory, extensions: Iterable[str]):
+        result = []
+        for fn in listdir(directory):
+            ffn = join(directory, fn)
+            if any(map(fn.lower().endswith, extensions)) and isfile(ffn):
+                result.append(fn)
+            elif isdir(ffn):
+                result += [join(fn, n) for n in RandomSource.get_files(ffn, extensions)]
+        return result
+
+    def __init__(self, directory, extensions: Iterable[str] = ('.png', '.mp4', '.mov')):
         self.directory = directory
-        self.files = [
-            fn
-            for fn in listdir(directory)
-            if any(map(fn.endswith, extensions)) and isfile(join(directory, fn))
-        ]
+        self.files = self.get_files(directory, extensions)
         self.idx = 0
 
     def __next__(self):
         if self.idx >= len(self.files):
             raise StopIteration
         fn = join(self.directory, self.files[self.idx])
-        if fn.endswith('.mp4'):
+        if any(map(fn.lower().endswith, ('.mp4', '.mov'))):
             cap = cv2.VideoCapture(fn)
-            frame_number = randrange(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            flag, frame = cap.read()
+            flag = False
+            frame = None
+            while not flag:
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                frame_number = randrange(frame_count)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                flag, frame = cap.read()
         else:
             frame = cv2.imread(fn)
         self.idx += 1
