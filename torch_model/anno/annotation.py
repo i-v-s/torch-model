@@ -12,6 +12,7 @@ class Annotation:
         self.device = device
         self.model = None
         self.player = None
+        self.initial_image = True
         if model_name is not None:
             self.update_model()
 

@@ -41,7 +41,8 @@ class AnnoPlayer:
         self.source = None
 
     def handler(self, event, x, y, flags, param):
-        self.cursor = self.transform.invert_point(x, y) if self.transform else (x, y)
+        need_inv = self.transform and self.anno and self.anno.initial_image
+        self.cursor = self.transform.invert_point(x, y) if need_inv else (x, y)
         if event == cv2.EVENT_LBUTTONDOWN:
             self.anno.on_left_down(x, y)
         elif event == cv2.EVENT_LBUTTONUP:
@@ -92,6 +93,8 @@ class AnnoPlayer:
                 index += 1
             fn = f'{index:04d}'
         if self.anno.save(join(directory, 'masks', fn)):
+            if not self.anno.initial_image:
+                frame = self.transform(frame)
             cv2.imwrite(join(directory, 'images', fn + '.png'), frame)
             self.img_map[self.hash(frame)] = fn
         #cv2.imwrite(join(directory, 'masks', fn + '.png'), mask[..., :3])
@@ -115,11 +118,14 @@ class AnnoPlayer:
         image = frame.copy()
         if mask.shape[-1] == 1:
             image[:, :, 0] |= mask[:, :, 0]
-        if not self.hide:
+        if not self.hide and self.anno.initial_image:
             self.anno.visualize(image, self.cursor, frame_no)
 
         if self.transform:
             image = self.transform(image)
+
+        if not self.hide and not self.anno.initial_image:
+            self.anno.visualize(image, self.cursor, frame_no)
 
         if writer:
             writer.write(mask)
@@ -187,9 +193,9 @@ class AnnoPlayer:
             k = cv2.waitKey(delay)
             if k == -1 or self.anno.on_key(k):
                 continue
-            elif k == ord('Q'): # Left
+            elif k == ord('Q'):  # Left
                 self.mask = np.concatenate((self.mask[:, 1:], self.mask[:, :1]))
-            elif k == ord('S'): # Right
+            elif k == ord('S'):  # Right
                 self.mask = np.concatenate((self.mask[:, -1:], self.mask[:, :-1]))
             elif k == ord('q'):
                 break
