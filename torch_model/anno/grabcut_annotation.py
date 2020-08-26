@@ -2,11 +2,13 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
+from ..io import batch_to_masks, images_to_batch
+
 from .annotation import Annotation
 
 
 class GrabCutAnnotation(Annotation):
-    def __init__(self, rect: Tuple[int, int, int, int]):
+    def __init__(self, rect: Tuple[int, int, int, int], model=None):
         super(GrabCutAnnotation, self).__init__()
         self.radius = 10
         self.mask = None
@@ -20,9 +22,16 @@ class GrabCutAnnotation(Annotation):
         self.bgd = np.zeros((1, 65), np.float64)
         self.fgd = np.zeros((1, 65), np.float64)
         self.se = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        self.model = model
+
+    def clear(self):
+        self.gc_mask[:] = cv2.GC_PR_BGD
 
     def process(self, frame: np.ndarray):
-        pass
+        if self.model is not None:
+            batch = images_to_batch([self.image], model=self.model)
+            mask, = batch_to_masks(self.model(batch))
+            self.gc_mask = np.where(mask[:, :, 0] == 255, cv2.GC_PR_FGD, cv2.GC_PR_BGD).astype(np.uint8)
 
     def save(self, fn: str) -> bool:
         mask = self.gc_mask

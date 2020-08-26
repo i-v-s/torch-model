@@ -19,6 +19,7 @@ class AffineTransform(AnnoTransform):
         self.out_size = out_size
 
     def __call__(self, frame: np.ndarray) -> np.ndarray:
+        assert isinstance(frame, np.ndarray)
         return cv2.warpAffine(frame, self.matrix, self.out_size)
 
     def invert_point(self, x: int, y: int) -> Tuple[float, float]:

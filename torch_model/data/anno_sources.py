@@ -112,6 +112,13 @@ class OCVSource(IterableDataset):
                 raise StopIteration
             return frame
 
+    def __getitem__(self, item: int):
+        self.set_frame_no(item)
+        flag, frame = self.cap.read()
+        if not flag:
+            raise IndexError
+        return frame
+
     def forward(self, frames=200):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) + frames)
 

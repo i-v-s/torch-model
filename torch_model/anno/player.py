@@ -93,7 +93,7 @@ class AnnoPlayer:
                 index += 1
             fn = f'{index:04d}'
         if self.anno.save(join(directory, 'masks', fn)):
-            if not self.anno.initial_image:
+            if self.transform is not None and not self.anno.initial_image:
                 frame = self.transform(frame)
             cv2.imwrite(join(directory, 'images', fn + '.png'), frame)
             self.img_map[self.hash(frame)] = fn
