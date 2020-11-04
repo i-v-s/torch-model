@@ -193,6 +193,11 @@ def nop(shape, *args, loader_info=None, **kwargs):
     return shape, nn.Identity(*args, **kwargs)
 
 
+def bn1d(shape, *args, loader_info=None, **kwargs):
+    assert len(shape) in [2, 3]
+    return shape, nn.BatchNorm1d(shape[1], *args, **kwargs)
+
+
 def bn2d(shape, *args, loader_info=None, **kwargs):
     assert len(shape) == 4
     return shape, nn.BatchNorm2d(shape[1], *args, **kwargs)
@@ -281,7 +286,7 @@ global_modules = {
     'linear': linear, 'max': Aggregate.create(torch.max),
     'relu': simple(nn.ReLU), 'prelu': simple(nn.PReLU), 'lrelu': simple(nn.LeakyReLU), 'sigmoid': simple(nn.Sigmoid),
     'dropout': simple(nn.Dropout), 'do2d': simple(nn.Dropout2d), 'do3d': simple(nn.Dropout3d),
-    'bn2d': bn2d, 'bn3d': bn3d,
+    'bn1d': bn1d, 'bn2d': bn2d, 'bn3d': bn3d,
     'nop': nop, 'add': container(Add, 'add', add_shape_calc), 'seq': container(nn.Sequential, 'seq'),
     'tuple': container(TupleProc, 'tuple', tuple_shape_calc),
     'wn_start': WaveStart.create, 'wn_cell': WaveCell.create, 'wn_reset': WaveReset.create, 'wn_end': WaveEnd.create

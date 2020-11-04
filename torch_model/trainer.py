@@ -31,14 +31,14 @@ class Epoch:
 
     def __int__(self):
         return self.trainer.epoch
-        
+
     def on_loss(self, loss, get_worst=None):
         self.losses += loss.detach().cpu().flatten().tolist()
 
         if self.train:
             loss.mean().backward()
             self.optimizer.step()
-            
+
         if get_worst == 'local':
             wl, wi = loss.detach().max(0)
             return wi.item()
@@ -83,7 +83,7 @@ class Trainer:
             self.tb_writer = None
 
     def report_quality(self, epoch: Epoch, stats: StatInfo):
-        print(f'Epoch {self.epoch} {epoch.name} mean loss: {stats.mean}, worst loss: {stats.max}')
+        print(f'Epoch {self.epoch} {epoch.name} mean loss: {stats.mean:.5f}, worst loss: {stats.max:.5f}')
 
     def save_checkpoint(self, name):
         torch.save({
