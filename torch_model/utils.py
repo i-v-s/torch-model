@@ -28,7 +28,8 @@ optimizers = {
 }
 
 
-def load_model(name, train=False, directory='models', device=None, best=False, n_classes=None, verbose=False, **params):
+def load_model(name, train=False, directory='models', device=None, best=False,
+               n_classes=None, verbose=False, rename=None, **params):
     model_dir = join(directory, name)
     if not isdir(model_dir):
         mkdir(model_dir)
@@ -45,7 +46,12 @@ def load_model(name, train=False, directory='models', device=None, best=False, n
     if not isfile(weights_fn):
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)
     if isfile(weights_fn):
-        model.load_state_dict(torch.load(weights_fn, map_location=device))
+        w = torch.load(weights_fn, map_location=device)
+        for key, target in (rename or {}).items():
+            if key in w:
+                w[target] = w[key]
+                del w[key]
+        model.load_state_dict(w)
         if verbose:
             print(f'Loaded model weights from {abspath(weights_fn)}')
     if n_classes is not None and n_classes > params['n_classes']:
