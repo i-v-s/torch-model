@@ -44,15 +44,15 @@ class AnnoPlayer:
         need_inv = self.transform and self.anno and self.anno.initial_image
         self.cursor = self.transform.invert_point(x, y) if need_inv else (x, y)
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.anno.on_left_down(x, y)
+            self.anno.on_left_down(*self.cursor)
         elif event == cv2.EVENT_LBUTTONUP:
-            self.anno.on_left_up(x, y)
+            self.anno.on_left_up(*self.cursor)
         elif event == cv2.EVENT_RBUTTONDOWN:
-            self.anno.on_right_down(x, y)
+            self.anno.on_right_down(*self.cursor)
         elif event == cv2.EVENT_RBUTTONUP:
-            self.anno.on_right_up(x, y)
+            self.anno.on_right_up(*self.cursor)
         elif event == cv2.EVENT_MOUSEMOVE:
-            self.anno.on_move(x, y)
+            self.anno.on_move(*self.cursor)
 
     def get_roi(self):
         if not self.roi:
@@ -173,7 +173,7 @@ class AnnoPlayer:
                 self.frame = frame
                 if self.use_model:
                     self.anno.process(frame)
-                result = self.zero_mask(frame) # self.anno.process(frame) if use_model else
+                result = self.zero_mask(frame)  # self.anno.process(frame) if use_model else
                 if type(result) is tuple:
                     self.mask, is_bad = result
                     if is_bad and self.frame_name is None:
