@@ -28,20 +28,24 @@ optimizers = {
 }
 
 
-def load_model(name, train=False, directory='models', device=None, best=False,
-               n_classes=None, verbose=False, rename=None, **params):
-    model_dir = join(directory, name)
-    if not isdir(model_dir):
-        mkdir(model_dir)
+def load_model_structure(name, **params):
     if isfile(join('models', '%s.yaml' % name)):
-        model = load_yaml(join('models', '%s.yaml' % name), name, **params)
+        return load_yaml(join('models', '%s.yaml' % name), name, **params)
     else:
         with open(join('models', '%s.json' % name)) as f:
             json_params = json.load(f)
         model_type = json_params['type']
         del json_params['type']
         json_params.update(params)
-        model = models[model_type](**json_params)
+        return models[model_type](**json_params)
+
+
+def load_model(name, train=False, directory='models', device=None, best=False,
+               n_classes=None, verbose=False, rename=None, **params):
+    model_dir = join(directory, name)
+    if not isdir(model_dir):
+        mkdir(model_dir)
+    model = load_model_structure(name, **params)
     weights_fn = join(model_dir, ('%s_best.pt' if best else '%s.pt') % name)
     if not isfile(weights_fn):
         weights_fn = join(directory, ('%s_best.pt' if best else '%s.pt') % name)
